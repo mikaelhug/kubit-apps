@@ -10,7 +10,7 @@ spec:
   values:
     replicaCount: 1
     ui:
-      message: Bob's podinfo from an OCI chart
+      message: Bob fixed his tag
     resources:
       requests:
         cpu: 10m
