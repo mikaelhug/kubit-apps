@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: registry.kubit/cara-queue:1.0.0
+          image: registry.kubit/cara-queue:1.0.1
           command: ["node", "api/server.js"]
           env:
             - name: REDIS_URL
@@ -68,7 +68,7 @@ spec:
     spec:
       containers:
         - name: worker
-          image: registry.kubit/cara-queue:1.0.0
+          image: registry.kubit/cara-queue:1.0.1
           command: ["node", "worker/worker.js"]
           env:
             - name: REDIS_URL
@@ -101,7 +101,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: registry.kubit/cara-queue:1.0.0
+          image: registry.kubit/cara-queue:1.0.1
           command: ["node", "web/server.js"]
           env:
             - name: REDIS_URL

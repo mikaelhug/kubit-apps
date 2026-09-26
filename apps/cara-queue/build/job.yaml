@@ -20,7 +20,7 @@ spec:
             - --opt
             - context=https://github.com/mikaelhug/kubit-apps.git#main:apps/cara-queue/src
             - --output
-            - type=image,name=registry.kubit-builds.svc:5000/cara-queue:1.0.0,push=true,registry.insecure=true
+            - type=image,name=registry.kubit-builds.svc:5000/cara-queue:1.0.1,push=true,registry.insecure=true
           resources:
             requests:
               cpu: 10m
