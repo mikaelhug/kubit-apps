@@ -2,7 +2,7 @@
 
 Applications for the Kubit lab cluster, deployed by Argo CD from this repository.
 Every folder under `apps/` is one application in its own namespace. Push to `main` and
-the cluster follows within about a minute; delete a folder and the app is removed.
+the cluster follows within one to two minutes; delete a folder and the app is removed.
 
 ```
 bootstrap/        Terraform, run once per cluster: creates the root Application
@@ -46,7 +46,7 @@ configs:
 ```
 
 `--enable-helm` lets an app folder pull in a Helm chart. `60s` makes Argo CD check Git
-every minute; the default is three.
+every minute (plus up to a minute of jitter); the default is three.
 
 ## Bootstrap (once per cluster)
 
@@ -122,6 +122,7 @@ Guidelines:
 - **The apps:**
   - `https://podinfo.192.168.105.200.nip.io`
   - `https://it-tools.192.168.105.200.nip.io`
+  - `https://whoami.192.168.105.200.nip.io`
   - `https://uptime-kuma.192.168.105.200.nip.io`
 
   The certificates are self-signed, so the browser warns once.
