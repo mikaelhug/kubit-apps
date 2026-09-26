@@ -4,11 +4,5 @@ namespace: podinfo
 
 resources:
   - ns.yaml
-
-helmCharts:
-  - name: podinfo
-    repo: https://stefanprodan.github.io/podinfo
-    version: 6.15.0
-    releaseName: podinfo
-    namespace: podinfo
-    valuesFile: values.yaml
+  - repository.yaml
+  - release.yaml

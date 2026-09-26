@@ -1,16 +1,12 @@
 # kubit-apps
 
-Applications for the Kubit lab cluster, deployed by Argo CD from this repository.
+Applications for the Kubit lab cluster, deployed by Flux from this repository.
 Every folder under `apps/` is one application in its own namespace. Push to `main` and
-the cluster follows within one to two minutes; delete a folder and the app is removed.
+the cluster follows within Flux's fetch interval; delete a folder and the app is removed.
 
 ```
-bootstrap/        Terraform, run once per cluster: creates the root Application
-argocd/           what the root Application syncs
-  project.yaml        AppProject "apps": what apps may touch
-  applicationset.yaml one Application per apps/<name>/, namespace <name>
-  cluster-issuer.yaml self-signed ClusterIssuer for app TLS
-apps/<name>/      one app: a kustomization (plain YAML and/or a Helm chart)
+apps/<name>/      one app: a kustomization (plain YAML and/or a HelmRelease)
+apps/cluster-issuer/  self-signed ClusterIssuer for app TLS
 .sops.yaml        who can decrypt secrets: you and each cluster
 .githooks/        pre-commit guard against plaintext Secrets
 ```
@@ -18,49 +14,34 @@ apps/<name>/      one app: a kustomization (plain YAML and/or a Helm chart)
 ## How it works
 
 ```
-terraform apply ──> Application "bootstrap" ──> argocd/
-                                                  ├─ AppProject "apps"
-                                                  └─ ApplicationSet "apps" ──> apps/podinfo      ──> namespace podinfo
-                                                                              apps/it-tools     ──> namespace it-tools
-                                                                              apps/uptime-kuma  ──> namespace uptime-kuma
+Kubit ──> GitRepository "flux-system" (this repo, main)
+          Kustomization "flux-system" (path ./apps, prune, SOPS) ──> apps/podinfo      ──> namespace podinfo
+                                                                     apps/it-tools     ──> namespace it-tools
+                                                                     apps/uptime-kuma  ──> namespace uptime-kuma
 ```
 
-- The **ApplicationSet** scans `apps/*` (git directory generator). Each folder becomes
-  an Argo CD Application named after the folder, deployed into a namespace of the same
-  name, with automated sync, prune and self-heal.
-- The **AppProject** keeps apps in their lane. They may create their own namespace and
-  anything inside it. They may not touch Kubernetes' or Kubit's platform namespaces, and
-  may not create Argo CD objects.
-- The **platform** (MetalLB, ingress-nginx, cert-manager, Longhorn, Argo CD itself) is
+- **Kubit** creates both Flux objects in `flux-system` from the cluster's
+  `platform.flux.repository`. Nothing in this repository bootstraps anything.
+- `apps/` has no `kustomization.yaml`, so Flux generates one that includes every
+  folder's kustomization. A folder you add is applied on the next fetch; a folder you
+  delete is pruned with everything it created.
+- One Kustomization builds all folders: a folder that does not build blocks the others
+  until it is fixed. Kubit's Flux card shows the error.
+- The **platform** (MetalLB, ingress-nginx, cert-manager, Longhorn, Flux itself) is
   not here: Kubit installs and upgrades it as add-ons.
 
 ## Prerequisites
 
 A Kubit cluster with these add-ons enabled: MetalLB, ingress-nginx, cert-manager,
-Argo CD and Longhorn (Longhorn only if an app uses a volume). Kubit sets up Argo CD for
-Helm charts in app folders and for SOPS-encrypted secrets. One value is recommended
-(Kubit → cluster → Add-ons → ArgoCD → Configure):
+Flux and Longhorn (Longhorn only if an app uses a volume). In Kubit → cluster →
+Add-ons → Flux → Configure:
 
-```yaml
-configs:
-  cm:
-    timeout.reconciliation: 60s
-```
+- Repository `https://github.com/mikaelhug/kubit-apps.git`
+- Path `./apps`
+- Interval `1m` (the default, `5m`, is fine outside the lab)
 
-`60s` makes Argo CD check Git every minute (plus up to a minute of jitter); the default
-is three.
-
-## Bootstrap (once per cluster)
-
-```bash
-cd bootstrap
-terraform init
-terraform apply
-```
-
-This uses the kubeconfig Kubit keeps at `~/.kubit/clusters/lab/kubeconfig`
-(`-var kubeconfig=...` for another cluster). Terraform only creates the root
-Application; everything after that comes from Git.
+Then *Plan changes* and apply. The Flux card shows the fetched revision and whether it
+applied.
 
 Once per clone, turn on the pre-commit guard:
 
@@ -85,27 +66,17 @@ apps/<name>/
   pvc.yaml             optional, storageClassName: longhorn
 ```
 
-**A Helm chart** (see `apps/podinfo`):
+**A Helm chart** (see `apps/podinfo`): a HelmRepository and a HelmRelease, values inline.
 
-```yaml
-# apps/<name>/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-namespace: <name>
-resources:
-  - ns.yaml
-helmCharts:
-  - name: <chart>
-    repo: <chart repository URL>
-    version: <pinned version>
-    releaseName: <name>
-    namespace: <name>
-    valuesFile: values.yaml
+```
+apps/<name>/
+  kustomization.yaml   namespace: <name>, resources: ns.yaml, repository.yaml, release.yaml
+  repository.yaml      HelmRepository <name>: the chart repository URL
+  release.yaml         HelmRelease <name>: chart, pinned version, values
 ```
 
-Check a folder before pushing: `kubectl kustomize --enable-helm apps/<name>`. For an
-app with secrets this also needs [ksops](https://github.com/viaduct-ai/kustomize-sops)
-and `--enable-alpha-plugins --enable-exec`.
+Check a folder before pushing: `kubectl kustomize apps/<name>`. Kustomize's
+`helmCharts` does not work under Flux; use a HelmRelease.
 
 Guidelines:
 - Pin versions (chart `version`, image tags). Never use `latest`.
@@ -120,9 +91,9 @@ Guidelines:
 
 Secrets live in Git, encrypted with [SOPS](https://getsops.io) and
 [age](https://age-encryption.org). Only the values are encrypted; names and structure
-stay readable. Argo CD decrypts them inside the cluster with the cluster's own key,
-which Kubit created and installed, so nothing depends on Kubit or this laptop at
-runtime.
+stay readable. Flux decrypts them inside the cluster with the cluster's own key,
+which Kubit created and installed as `flux-system/sops-age`, so nothing depends on
+Kubit or this laptop at runtime.
 
 `.sops.yaml` lists who can decrypt: your personal key (to edit) and one key per
 cluster. Every `apps/**/*.sops.yaml` is encrypted for all of them.
@@ -142,13 +113,12 @@ by `age-keygen`) in `.sops.yaml`.
 1. Create `apps/<name>/secret.sops.yaml`, a normal Secret with `stringData`, and
    encrypt it before staging: `sops encrypt -i apps/<name>/secret.sops.yaml`.
    Or create and edit in one go: `sops edit apps/<name>/secret.sops.yaml`.
-2. Add `secret-generator.yaml` (copy from linkding, adjust `files`) and list it under
-   `generators:` in the kustomization.
+2. List it under `resources:` in the kustomization, like any other file.
 3. Use it from the pod: `envFrom: secretRef` or a volume.
 
 Change a value later with `sops edit <file>`, then commit and push.
 
-**Add a cluster:** copy its recipient from Kubit (cluster → Add-ons → ArgoCD → SOPS
+**Add a cluster:** copy its recipient from Kubit (cluster → Add-ons → Flux → SOPS
 recipient, or `kubit sops recipient <cluster>`), add it under `age:` in `.sops.yaml`,
 then re-encrypt every file for the new list:
 
@@ -162,17 +132,16 @@ refuses plaintext Secrets and unencrypted `*.sops.yaml` files.
 
 ## Change or remove an app
 
-- **Change:** edit the files and push. Argo CD applies the difference, and reverts
-  changes made by hand in the cluster (self-heal).
-- **Remove:** delete the folder and push. The Application is removed, and with it
-  everything it created, including the namespace and its volumes.
+- **Change:** edit the files and push. Flux applies the difference, and reverts
+  changes made by hand in the cluster within ten minutes.
+- **Remove:** delete the folder and push. Flux prunes everything it created,
+  including the namespace and its volumes.
 
 ## Where to look
 
-- **Argo CD:** the UI is on its own LoadBalancer IP. Find it on Kubit's ArgoCD card
-  (*Open*). The user is `admin`; the password is in secret
-  `argocd/argocd-initial-admin-secret`.
-- **Kubit:** cluster → Workloads, Network, Storage, under the **Apps** scope.
+- **Kubit:** cluster → Add-ons → Flux for the sync state (revision, errors), and
+  Workloads, Network, Storage under the **Apps** scope for the apps themselves. Flux
+  has no UI of its own.
 - **The apps:**
   - `https://podinfo.192.168.105.200.nip.io`
   - `https://it-tools.192.168.105.200.nip.io`

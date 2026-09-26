@@ -5,9 +5,7 @@ namespace: linkding
 resources:
   - ns.yaml
   - pvc.yaml
+  - secret.sops.yaml
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-
-generators:
-  - secret-generator.yaml
