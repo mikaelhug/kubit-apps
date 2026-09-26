@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: web
+          image: registry.kubit/ana-phoenix:0.1.0
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: ana-phoenix, key: DATABASE_URL }
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef: { name: ana-phoenix, key: SECRET_KEY_BASE }
+            - name: PHX_HOST
+              value: ana-phoenix.192.168.105.200.nip.io
+          ports:
+            - name: http
+              containerPort: 4000
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            requests:
+              cpu: 20m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector:
+    app.kubernetes.io/name: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
