@@ -3,8 +3,9 @@ const page = (now: Date) => `<!doctype html>
 <title>Ben's clock</title>
 <body style="font-family: system-ui; display: grid; place-items: center; height: 100vh; margin: 0">
   <div style="text-align: center">
+    <h2>${now.toDateString()}</h2>
     <h1 id="time">${now.toLocaleTimeString("en-GB", { timeZone: "Europe/Stockholm" })}</h1>
-    <p>Stockholm time, served by Ben's Deno clock.</p>
+    <p>Stockholm time, served by Ben's Deno clock, now with the date.</p>
   </div>
   <script>
     setInterval(() => {
