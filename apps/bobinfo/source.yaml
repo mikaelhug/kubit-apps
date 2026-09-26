@@ -6,4 +6,4 @@ spec:
   interval: 1h
   url: oci://ghcr.io/stefanprodan/charts/podinfo
   ref:
-    tag: 6.15.0
+    tag: 6.99.0
