@@ -1,11 +1,12 @@
 # kubit-apps
 
 Applications for the Kubit lab cluster, deployed by Flux from this repository.
-Every folder under `apps/` is one application in its own namespace. Push to `main` and
-the cluster follows within Flux's fetch interval; delete a folder and the app is removed.
+Every app is a folder under `apps/` plus one file under `flux/` that tells Flux to
+deploy it. Push to `main` and the cluster follows within Flux's fetch interval.
 
 ```
 apps/<name>/      one app: a kustomization (plain YAML and/or a HelmRelease)
+flux/<name>.yaml  the Flux Kustomization that deploys apps/<name>/
 apps/cluster-issuer/  self-signed ClusterIssuer for app TLS
 .sops.yaml        who can decrypt secrets: you and each cluster
 .githooks/        pre-commit guard against plaintext Secrets
@@ -15,18 +16,17 @@ apps/cluster-issuer/  self-signed ClusterIssuer for app TLS
 
 ```
 Kubit ──> GitRepository "flux-system" (this repo, main)
-          Kustomization "flux-system" (path ./apps, prune, SOPS) ──> apps/podinfo      ──> namespace podinfo
-                                                                     apps/it-tools     ──> namespace it-tools
-                                                                     apps/uptime-kuma  ──> namespace uptime-kuma
+          Kustomization "flux-system" (path ./flux) ──> Kustomization "podinfo"  ──> apps/podinfo  ──> namespace podinfo
+                                                        Kustomization "it-tools" ──> apps/it-tools ──> namespace it-tools
+                                                        …
 ```
 
 - **Kubit** creates both Flux objects in `flux-system` from the cluster's
   `platform.flux.repository`. Nothing in this repository bootstraps anything.
-- `apps/` has no `kustomization.yaml`, so Flux generates one that includes every
-  folder's kustomization. A folder you add is applied on the next fetch; a folder you
-  delete is pruned with everything it created.
-- One Kustomization builds all folders: a folder that does not build blocks the others
-  until it is fixed. Kubit's Flux card shows the error.
+- Kubit's Kustomization applies `flux/`: one Flux Kustomization per app. Each app
+  builds, applies and fails on its own, so a broken app never holds back the others.
+  Kubit's Flux card lists every app with its revision or its error, and raises a
+  `flux.not-ready` alert when one keeps failing.
 - The **platform** (MetalLB, ingress-nginx, cert-manager, Longhorn, Flux itself) is
   not here: Kubit installs and upgrades it as add-ons.
 
@@ -37,7 +37,7 @@ Flux and Longhorn (Longhorn only if an app uses a volume). In Kubit → cluster 
 Add-ons → Flux → Configure:
 
 - Repository `https://github.com/mikaelhug/kubit-apps.git`
-- Path `./apps`
+- Path `./flux`
 - Interval `1m` (the default, `5m`, is fine outside the lab)
 
 Then *Plan changes* and apply. The Flux card shows the fetched revision and whether it
@@ -51,8 +51,10 @@ git config core.hooksPath .githooks
 
 ## Add an app
 
-Create `apps/<name>/`. The folder name is the app name and its namespace, so use
-lowercase letters, digits and dashes. Then commit and push.
+Create `apps/<name>/` and `flux/<name>.yaml` (copy another file in `flux/` and change
+the name and path). The name is the app name and its namespace, so use lowercase
+letters, digits and dashes. Then commit and push. If the push is rejected because
+someone else pushed first, `git pull --rebase` and push again.
 
 **Plain YAML** (see `apps/it-tools`):
 
@@ -134,8 +136,8 @@ refuses plaintext Secrets and unencrypted `*.sops.yaml` files.
 
 - **Change:** edit the files and push. Flux applies the difference, and reverts
   changes made by hand in the cluster within ten minutes.
-- **Remove:** delete the folder and push. Flux prunes everything it created,
-  including the namespace and its volumes.
+- **Remove:** delete the folder and its `flux/<name>.yaml`, and push. Flux prunes
+  everything it created, including the namespace and its volumes.
 
 ## Where to look
 
