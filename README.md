@@ -11,6 +11,8 @@ argocd/           what the root Application syncs
   applicationset.yaml one Application per apps/<name>/, namespace <name>
   cluster-issuer.yaml self-signed ClusterIssuer for app TLS
 apps/<name>/      one app: a kustomization (plain YAML and/or a Helm chart)
+.sops.yaml        who can decrypt secrets: you and each cluster
+.githooks/        pre-commit guard against plaintext Secrets
 ```
 
 ## How it works
@@ -35,18 +37,18 @@ terraform apply ──> Application "bootstrap" ──> argocd/
 ## Prerequisites
 
 A Kubit cluster with these add-ons enabled: MetalLB, ingress-nginx, cert-manager,
-Argo CD and Longhorn (Longhorn only if an app uses a volume). The Argo CD add-on needs
-these values (Kubit → cluster → Add-ons → ArgoCD → Configure):
+Argo CD and Longhorn (Longhorn only if an app uses a volume). Kubit sets up Argo CD for
+Helm charts in app folders and for SOPS-encrypted secrets. One value is recommended
+(Kubit → cluster → Add-ons → ArgoCD → Configure):
 
 ```yaml
 configs:
   cm:
-    kustomize.buildOptions: --enable-helm
     timeout.reconciliation: 60s
 ```
 
-`--enable-helm` lets an app folder pull in a Helm chart. `60s` makes Argo CD check Git
-every minute (plus up to a minute of jitter); the default is three.
+`60s` makes Argo CD check Git every minute (plus up to a minute of jitter); the default
+is three.
 
 ## Bootstrap (once per cluster)
 
@@ -59,6 +61,12 @@ terraform apply
 This uses the kubeconfig Kubit keeps at `~/.kubit/clusters/lab/kubeconfig`
 (`-var kubeconfig=...` for another cluster). Terraform only creates the root
 Application; everything after that comes from Git.
+
+Once per clone, turn on the pre-commit guard:
+
+```bash
+git config core.hooksPath .githooks
+```
 
 ## Add an app
 
@@ -95,7 +103,9 @@ helmCharts:
     valuesFile: values.yaml
 ```
 
-Check a folder before pushing: `kubectl kustomize --enable-helm apps/<name>`.
+Check a folder before pushing: `kubectl kustomize --enable-helm apps/<name>`. For an
+app with secrets this also needs [ksops](https://github.com/viaduct-ai/kustomize-sops)
+and `--enable-alpha-plugins --enable-exec`.
 
 Guidelines:
 - Pin versions (chart `version`, image tags). Never use `latest`.
@@ -105,6 +115,50 @@ Guidelines:
   `Recreate` strategy for single-replica apps.
 - `ns.yaml` sets Pod Security `baseline`. Use `restricted` for apps that run as
   non-root.
+
+## Secrets
+
+Secrets live in Git, encrypted with [SOPS](https://getsops.io) and
+[age](https://age-encryption.org). Only the values are encrypted; names and structure
+stay readable. Argo CD decrypts them inside the cluster with the cluster's own key,
+which Kubit created and installed, so nothing depends on Kubit or this laptop at
+runtime.
+
+`.sops.yaml` lists who can decrypt: your personal key (to edit) and one key per
+cluster. Every `apps/**/*.sops.yaml` is encrypted for all of them.
+
+**Once per machine:**
+
+```bash
+brew install sops age
+age-keygen -o ~/Library/Application\ Support/sops/age/keys.txt
+```
+
+Keep a copy of that key in your password manager. Put its public key (`age1…`, printed
+by `age-keygen`) in `.sops.yaml`.
+
+**Add a secret to an app** (see `apps/linkding`):
+
+1. Create `apps/<name>/secret.sops.yaml`, a normal Secret with `stringData`, and
+   encrypt it before staging: `sops encrypt -i apps/<name>/secret.sops.yaml`.
+   Or create and edit in one go: `sops edit apps/<name>/secret.sops.yaml`.
+2. Add `secret-generator.yaml` (copy from linkding, adjust `files`) and list it under
+   `generators:` in the kustomization.
+3. Use it from the pod: `envFrom: secretRef` or a volume.
+
+Change a value later with `sops edit <file>`, then commit and push.
+
+**Add a cluster:** copy its recipient from Kubit (cluster → Add-ons → ArgoCD → SOPS
+recipient, or `kubit sops recipient <cluster>`), add it under `age:` in `.sops.yaml`,
+then re-encrypt every file for the new list:
+
+```bash
+find apps -name '*.sops.yaml' -exec sops updatekeys -y {} \;
+```
+
+**Public repository:** the ciphertext is safe to publish, but history is permanent.
+If a key ever leaks, change the secret values, not only the key. The pre-commit hook
+refuses plaintext Secrets and unencrypted `*.sops.yaml` files.
 
 ## Change or remove an app
 
@@ -124,5 +178,7 @@ Guidelines:
   - `https://it-tools.192.168.105.200.nip.io`
   - `https://whoami.192.168.105.200.nip.io`
   - `https://uptime-kuma.192.168.105.200.nip.io`
+  - `https://linkding.192.168.105.200.nip.io`: user `admin`, password from
+    `sops decrypt apps/linkding/secret.sops.yaml`
 
   The certificates are self-signed, so the browser warns once.
