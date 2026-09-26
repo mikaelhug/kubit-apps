@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dan-blog
+  annotations:
+    cert-manager.io/cluster-issuer: selfsigned
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: dan-blog-tls
+      hosts:
+        - dan-blog.192.168.105.200.nip.io
+  rules:
+    - host: dan-blog.192.168.105.200.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wordpress
+                port:
+                  name: http
