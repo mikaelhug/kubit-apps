@@ -12,10 +12,10 @@ spec:
         kind: HelmRepository
         name: podinfo
   values:
-    replicaCount: 3
+    replicaCount: 2
 
     ui:
-      message: Deployed from github.com/mikaelhug/kubit-apps
+      message: Scaled down by Eve
 
     resources:
       requests:
