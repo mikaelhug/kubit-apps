@@ -4,6 +4,12 @@ metadata:
   name: podinfo
 spec:
   interval: 10m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
   chart:
     spec:
       chart: podinfo

@@ -74,7 +74,8 @@ apps/<name>/
 apps/<name>/
   kustomization.yaml   namespace: <name>, resources: ns.yaml, repository.yaml, release.yaml
   repository.yaml      HelmRepository <name>: the chart repository URL
-  release.yaml         HelmRelease <name>: chart, pinned version, values
+  release.yaml         HelmRelease <name>: chart, pinned version, values,
+                       install/upgrade remediation retries (copy from podinfo)
 ```
 
 Check a folder before pushing: `kubectl kustomize apps/<name>`. Kustomize's
