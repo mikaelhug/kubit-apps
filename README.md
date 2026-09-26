@@ -32,16 +32,15 @@ Kubit ──> GitRepository "flux-system" (this repo, main)
 
 ## Prerequisites
 
-A Kubit cluster with these add-ons enabled: MetalLB, ingress-nginx, cert-manager,
-Flux and Longhorn (Longhorn only if an app uses a volume). In Kubit → cluster →
-Add-ons → Flux → Configure:
+A Kubit cluster: a new one comes with everything these apps use (MetalLB,
+ingress-nginx, cert-manager, Flux, Longhorn, Builds). Give Kubit the repository when
+you create the cluster (lab host dialog or wizard), or later under Add-ons → Flux →
+Configure:
 
 - Repository `https://github.com/mikaelhug/kubit-apps.git`
 - Path `./flux`
-- Interval `1m` (the default, `5m`, is fine outside the lab)
 
-Then *Plan changes* and apply. The Flux card shows the fetched revision and whether it
-applied.
+Once the cluster exists, add its SOPS recipient to `.sops.yaml` (see Secrets).
 
 Once per clone, turn on the pre-commit guard:
 
@@ -56,7 +55,7 @@ the name and path). The name is the app name and its namespace, so use lowercase
 letters, digits and dashes. Then commit and push. If the push is rejected because
 someone else pushed first, `git pull --rebase` and push again.
 
-**Plain YAML** (see `apps/it-tools`):
+**Plain YAML** (see `apps/ben-clock`):
 
 ```
 apps/<name>/
@@ -68,15 +67,34 @@ apps/<name>/
   pvc.yaml             optional, storageClassName: longhorn
 ```
 
-**A Helm chart** (see `apps/podinfo`): a HelmRepository and a HelmRelease, values inline.
+**A Helm chart**: a HelmRepository and a HelmRelease, values inline.
 
 ```
 apps/<name>/
   kustomization.yaml   namespace: <name>, resources: ns.yaml, repository.yaml, release.yaml
   repository.yaml      HelmRepository <name>: the chart repository URL
   release.yaml         HelmRelease <name>: chart, pinned version, values,
-                       install/upgrade remediation retries (copy from podinfo)
+                       install/upgrade remediation retries: 3
 ```
+
+**Your own code** (see `apps/ana-phoenix`): the cluster builds the image (Kubit's
+Builds add-on); there is no CI to set up.
+
+```
+apps/<name>/
+  src/                 the code and its Dockerfile
+  build/job.yaml       a Job in namespace kubit-builds that runs buildctl: Git context
+                       https://github.com/mikaelhug/kubit-apps.git#main:apps/<name>/src,
+                       pushes registry.kubit-builds.svc:5000/<name>:<version>
+  build/kustomization.yaml
+  deployment.yaml      image registry.kubit/<name>:<version>
+flux/<name>-build.yaml Kustomization for build/: wait: true, force: true, timeout: 30m
+flux/<name>.yaml       dependsOn: <name>-build
+```
+
+Bump `<version>` in `build/job.yaml` and `deployment.yaml` together when the code
+changes: the new version re-creates the build Job, and the app rolls once the image
+is in the registry. Build state and logs: Kubit → Add-ons → Builds.
 
 Check a folder before pushing: `kubectl kustomize apps/<name>`. Kustomize's
 `helmCharts` does not work under Flux; use a HelmRelease.
@@ -111,7 +129,7 @@ age-keygen -o ~/Library/Application\ Support/sops/age/keys.txt
 Keep a copy of that key in your password manager. Put its public key (`age1…`, printed
 by `age-keygen`) in `.sops.yaml`.
 
-**Add a secret to an app** (see `apps/linkding`):
+**Add a secret to an app** (see `apps/eve-bot`):
 
 1. Create `apps/<name>/secret.sops.yaml`, a normal Secret with `stringData`, and
    encrypt it before staging: `sops encrypt -i apps/<name>/secret.sops.yaml`.
@@ -145,12 +163,5 @@ refuses plaintext Secrets and unencrypted `*.sops.yaml` files.
 - **Kubit:** cluster → Add-ons → Flux for the sync state (revision, errors), and
   Workloads, Network, Storage under the **Apps** scope for the apps themselves. Flux
   has no UI of its own.
-- **The apps:**
-  - `https://podinfo.192.168.105.200.nip.io`
-  - `https://it-tools.192.168.105.200.nip.io`
-  - `https://whoami.192.168.105.200.nip.io`
-  - `https://uptime-kuma.192.168.105.200.nip.io`
-  - `https://linkding.192.168.105.200.nip.io`: user `admin`, password from
-    `sops decrypt apps/linkding/secret.sops.yaml`
-
-  The certificates are self-signed, so the browser warns once.
+- **The apps:** `https://<name>.192.168.105.200.nip.io`. The certificates are
+  self-signed, so the browser warns once.
