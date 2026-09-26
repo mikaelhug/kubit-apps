@@ -1,4 +1,4 @@
-replicaCount: 2
+replicaCount: 3
 
 ui:
   message: Deployed from github.com/mikaelhug/kubit-apps
