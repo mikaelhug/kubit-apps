@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Cara's queue</title>
+<body style="font-family: system-ui; max-width: 40rem; margin: 3rem auto">
+  <h1>Cara's queue</h1>
+  <form id="f"><input id="t" placeholder="text to process" autofocus> <button>Queue</button></form>
+  <ul id="jobs"></ul>
+  <p id="stats"></p>
+  <script>
+    const list = document.getElementById("jobs");
+    async function poll(id, li) {
+      const job = await (await fetch(`/api/jobs/${id}`)).json();
+      li.textContent = `${job.text} → ${job.status}${job.result ? `: ${job.result}` : ""}`;
+      if (job.status !== "done") setTimeout(() => poll(id, li), 500);
+    }
+    document.getElementById("f").onsubmit = async (e) => {
+      e.preventDefault();
+      const text = document.getElementById("t").value;
+      const { id } = await (await fetch("/api/jobs", { method: "POST", body: JSON.stringify({ text }) })).json();
+      const li = document.createElement("li");
+      list.prepend(li);
+      poll(id, li);
+    };
+    fetch("/api/stats").then((r) => r.json()).then((s) => { document.getElementById("stats").textContent = `${s.done} jobs done`; });
+  </script>
+</body>

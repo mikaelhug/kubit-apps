@@ -1,0 +1,16 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cara-queue-build
+  namespace: flux-system
+spec:
+  path: ./apps/cara-queue/build
+  interval: 10m
+  retryInterval: 1m
+  timeout: 30m
+  prune: true
+  wait: true
+  force: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

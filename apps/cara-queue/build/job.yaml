@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cara-queue
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: build
+          image: moby/buildkit:v0.25.1
+          command:
+            - buildctl
+            - --addr
+            - tcp://buildkitd.kubit-builds:1234
+            - build
+            - --frontend
+            - dockerfile.v0
+            - --opt
+            - context=https://github.com/mikaelhug/kubit-apps.git#main:apps/cara-queue/src
+            - --output
+            - type=image,name=registry.kubit-builds.svc:5000/cara-queue:1.0.0,push=true,registry.insecure=true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi

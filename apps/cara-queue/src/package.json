@@ -1,0 +1,14 @@
+{
+  "name": "cara-queue",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "api": "node api/server.js",
+    "worker": "node worker/worker.js",
+    "web": "node web/server.js"
+  },
+  "dependencies": {
+    "redis": "5.8.2"
+  }
+}
