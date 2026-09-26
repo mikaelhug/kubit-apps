@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ben-clock
+  annotations:
+    cert-manager.io/cluster-issuer: selfsigned
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: ben-clock-tls
+      hosts:
+        - ben-clock.192.168.105.200.nip.io
+  rules:
+    - host: ben-clock.192.168.105.200.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ben-clock
+                port:
+                  name: http

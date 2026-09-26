@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ben-clock
+  labels:
+    app.kubernetes.io/name: ben-clock
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ben-clock
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ben-clock
+    spec:
+      containers:
+        - name: clock
+          image: denoland/deno:2.5.2
+          args: ["run", "--allow-net", "/app/main.ts"]
+          env:
+            - name: DENO_DIR
+              value: /tmp/deno
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: code
+              mountPath: /app
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: code
+          configMap:
+            name: clock-code
+        - name: tmp
+          emptyDir: {}
