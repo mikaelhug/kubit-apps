@@ -16,4 +16,4 @@ metadata:
   name: guestbook-html
 data:
   index.html: |
-    <h1>Alice's guestbook v1</h1>
+    <h1>Alice's guestbook v2</h1>
