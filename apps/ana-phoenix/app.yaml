@@ -14,9 +14,17 @@ spec:
       labels:
         app.kubernetes.io/name: web
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:17-alpine
+          command: ["sh", "-c", "until pg_isready -h postgres -U postgres; do sleep 2; done"]
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
       containers:
         - name: web
-          image: registry.kubit/ana-phoenix:0.1.0
+          image: registry.kubit/ana-phoenix:0.1.1
           env:
             - name: DATABASE_URL
               valueFrom:

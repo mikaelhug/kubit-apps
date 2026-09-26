@@ -1,6 +1,8 @@
 import Config
 
 if config_env() == :prod do
+  config :logger, level: :info
+
   config :visits, Visits.Repo,
     url: System.fetch_env!("DATABASE_URL"),
     pool_size: 5
